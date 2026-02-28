@@ -1,0 +1,524 @@
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import AppLayout from "@/components/layout/AppLayout";
+import StatusBadge from "@/components/shared/StatusBadge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { Loader2, Plus, Trash2, ArrowLeft, Save, Send, PackageCheck } from "lucide-react";
+
+interface POLine {
+  id?: string;
+  product_id: string;
+  product_name?: string;
+  quantity: number;
+  unit_price: number;
+  discount_pct: number;
+  tax_rate: number;
+  line_total: number;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  sku: string;
+  cost_price: number;
+}
+
+const calcLineTotal = (qty: number, price: number, discountPct: number): number => {
+  const subtotal = qty * price;
+  const discount = subtotal * (discountPct / 100);
+  return subtotal - discount;
+};
+
+const PurchaseOrderForm = () => {
+  const { id } = useParams();
+  const isNew = !id || id === "new";
+  const navigate = useNavigate();
+  const { currentWorkspace } = useWorkspace();
+  const { user } = useAuth();
+
+  const [loading, setLoading] = useState(!isNew);
+  const [saving, setSaving] = useState(false);
+  const [orderNumber, setOrderNumber] = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [notes, setNotes] = useState("");
+  const [status, setStatus] = useState<string>("draft");
+  const [lines, setLines] = useState<POLine[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [taxRates, setTaxRates] = useState<{ rate: number; name: string }[]>([]);
+  const [addLineOpen, setAddLineOpen] = useState(false);
+
+  // New line state
+  const [newProductId, setNewProductId] = useState("");
+  const [newQty, setNewQty] = useState(1);
+  const [newPrice, setNewPrice] = useState(0);
+  const [newDiscount, setNewDiscount] = useState(0);
+  const [newTaxRate, setNewTaxRate] = useState(20);
+
+  const subtotal = lines.reduce((s, l) => s + l.line_total, 0);
+  const taxTotal = lines.reduce((s, l) => s + l.line_total * (l.tax_rate / 100), 0);
+  const total = subtotal + taxTotal;
+
+  // Load reference data
+  useEffect(() => {
+    if (!currentWorkspace) return;
+    const load = async () => {
+      const [supRes, prodRes, taxRes] = await Promise.all([
+        supabase.from("suppliers").select("id, name").eq("workspace_id", currentWorkspace.id),
+        supabase.from("products").select("id, name, sku, cost_price").eq("workspace_id", currentWorkspace.id).eq("active", true),
+        supabase.from("tax_rates").select("rate, name").eq("workspace_id", currentWorkspace.id).eq("active", true).order("rate", { ascending: false }),
+      ]);
+      setSuppliers(supRes.data || []);
+      setProducts(prodRes.data || []);
+      setTaxRates(taxRes.data || []);
+      if (taxRes.data?.length) {
+        const def = taxRes.data.find((t: any) => t.rate === 20);
+        if (def) setNewTaxRate(def.rate);
+      }
+    };
+    load();
+  }, [currentWorkspace]);
+
+  // Generate order number for new PO
+  useEffect(() => {
+    if (!isNew || !currentWorkspace) return;
+    const genNumber = async () => {
+      const { count } = await supabase
+        .from("purchase_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", currentWorkspace.id);
+      setOrderNumber(`PO-${String((count || 0) + 1).padStart(4, "0")}`);
+    };
+    genNumber();
+  }, [isNew, currentWorkspace]);
+
+  // Load existing PO
+  useEffect(() => {
+    if (isNew || !currentWorkspace) return;
+    const loadPO = async () => {
+      const { data: po, error } = await supabase
+        .from("purchase_orders")
+        .select("*, purchase_order_lines(*, products(name, sku))")
+        .eq("id", id)
+        .single();
+
+      if (error || !po) {
+        toast.error("Purchase order not found");
+        navigate("/purchases/orders");
+        return;
+      }
+
+      setOrderNumber(po.order_number);
+      setSupplierId(po.supplier_id);
+      setNotes(po.notes || "");
+      setStatus(po.status);
+      setLines(
+        (po.purchase_order_lines || []).map((l: any) => ({
+          id: l.id,
+          product_id: l.product_id,
+          product_name: l.products?.name || "",
+          quantity: l.quantity,
+          unit_price: Number(l.unit_price),
+          discount_pct: Number(l.discount_pct),
+          tax_rate: Number(l.tax_rate),
+          line_total: Number(l.line_total),
+        }))
+      );
+      setLoading(false);
+    };
+    loadPO();
+  }, [id, isNew, currentWorkspace]);
+
+  const handleAddLine = () => {
+    const product = products.find((p) => p.id === newProductId);
+    if (!product) return;
+    const lineTotal = calcLineTotal(newQty, newPrice, newDiscount);
+    setLines((prev) => [
+      ...prev,
+      {
+        product_id: newProductId,
+        product_name: product.name,
+        quantity: newQty,
+        unit_price: newPrice,
+        discount_pct: newDiscount,
+        tax_rate: newTaxRate,
+        line_total: lineTotal,
+      },
+    ]);
+    setAddLineOpen(false);
+    setNewProductId("");
+    setNewQty(1);
+    setNewPrice(0);
+    setNewDiscount(0);
+  };
+
+  const removeLine = (idx: number) => {
+    setLines((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleProductSelect = (productId: string) => {
+    setNewProductId(productId);
+    const product = products.find((p) => p.id === productId);
+    if (product) setNewPrice(Number(product.cost_price));
+  };
+
+  const handleSave = async (newStatus?: string) => {
+    if (!currentWorkspace || !user) return;
+    if (!supplierId) { toast.error("Please select a supplier"); return; }
+    if (lines.length === 0) { toast.error("Add at least one line item"); return; }
+
+    setSaving(true);
+    const targetStatus = newStatus || status;
+
+    try {
+      if (isNew) {
+        const { data: po, error: poErr } = await supabase
+          .from("purchase_orders")
+          .insert({
+            workspace_id: currentWorkspace.id,
+            order_number: orderNumber,
+            supplier_id: supplierId,
+            status: targetStatus as any,
+            subtotal,
+            tax_total: taxTotal,
+            total,
+            notes: notes || null,
+            created_by: user.id,
+          })
+          .select("id")
+          .single();
+
+        if (poErr) throw poErr;
+
+        const lineInserts = lines.map((l) => ({
+          purchase_order_id: po.id,
+          product_id: l.product_id,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          discount_pct: l.discount_pct,
+          tax_rate: l.tax_rate,
+          line_total: l.line_total,
+        }));
+
+        const { error: lineErr } = await supabase.from("purchase_order_lines").insert(lineInserts);
+        if (lineErr) throw lineErr;
+
+        toast.success("Purchase order created");
+        navigate(`/purchases/orders/${po.id}`);
+      } else {
+        const { error: poErr } = await supabase
+          .from("purchase_orders")
+          .update({
+            supplier_id: supplierId,
+            status: targetStatus as any,
+            subtotal,
+            tax_total: taxTotal,
+            total,
+            notes: notes || null,
+          })
+          .eq("id", id);
+
+        if (poErr) throw poErr;
+
+        // Delete existing lines and re-insert
+        await supabase.from("purchase_order_lines").delete().eq("purchase_order_id", id);
+
+        const lineInserts = lines.map((l) => ({
+          purchase_order_id: id!,
+          product_id: l.product_id,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          discount_pct: l.discount_pct,
+          tax_rate: l.tax_rate,
+          line_total: l.line_total,
+        }));
+
+        const { error: lineErr } = await supabase.from("purchase_order_lines").insert(lineInserts);
+        if (lineErr) throw lineErr;
+
+        setStatus(targetStatus);
+        toast.success("Purchase order updated");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save");
+    }
+    setSaving(false);
+  };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const isEditable = status === "draft";
+
+  return (
+    <AppLayout>
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/purchases/orders")}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">{orderNumber}</h1>
+              <StatusBadge status={status} />
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {isNew ? "New purchase order" : "Edit purchase order"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {isEditable && (
+            <>
+              <Button variant="outline" onClick={() => handleSave()} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                Save Draft
+              </Button>
+              <Button onClick={() => handleSave("ordered")} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                Mark as Ordered
+              </Button>
+            </>
+          )}
+          {status === "ordered" && (
+            <Button onClick={() => handleSave("received")} disabled={saving} className="bg-success hover:bg-success/90">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PackageCheck className="w-4 h-4 mr-2" />}
+              Mark as Received
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Details */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Supplier & Notes */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Supplier</Label>
+                <Select value={supplierId} onValueChange={setSupplierId} disabled={!isEditable}>
+                  <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {suppliers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No suppliers yet.{" "}
+                    <button onClick={() => navigate("/purchases/suppliers")} className="text-primary hover:underline">
+                      Add one first
+                    </button>
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>PO Number</Label>
+                <Input value={orderNumber} disabled className="font-mono" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!isEditable} placeholder="Optional notes..." rows={2} />
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-semibold text-foreground">Line Items</h2>
+              {isEditable && (
+                <Button size="sm" variant="outline" onClick={() => setAddLineOpen(true)}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Item
+                </Button>
+              )}
+            </div>
+
+            {lines.length === 0 ? (
+              <div className="px-5 py-10 text-center text-muted-foreground text-sm">
+                No items yet. Click "Add Item" to get started.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Unit Price</TableHead>
+                    <TableHead className="text-right">Disc %</TableHead>
+                    <TableHead className="text-right">{currentWorkspace?.tax_label} %</TableHead>
+                    <TableHead className="text-right">Subtotal</TableHead>
+                    {isEditable && <TableHead className="w-10"></TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lines.map((l, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium">{l.product_name || "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{l.quantity}</TableCell>
+                      <TableCell className="text-right font-mono">{l.unit_price.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{l.discount_pct}%</TableCell>
+                      <TableCell className="text-right">{l.tax_rate}%</TableCell>
+                      <TableCell className="text-right font-mono font-semibold">{l.line_total.toFixed(2)}</TableCell>
+                      {isEditable && (
+                        <TableCell>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeLine(idx)}>
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Totals */}
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+            <h2 className="font-semibold text-foreground mb-2">Summary</h2>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-mono">{subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">{currentWorkspace?.tax_label}</span>
+              <span className="font-mono">{taxTotal.toFixed(2)}</span>
+            </div>
+            <div className="border-t border-border pt-3 flex justify-between font-semibold">
+              <span>Total ({currentWorkspace?.currency})</span>
+              <span className="font-mono text-lg">{total.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Status workflow */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <h2 className="font-semibold text-foreground mb-3">Workflow</h2>
+            <div className="space-y-2">
+              {["draft", "ordered", "received"].map((s, i) => {
+                const isCurrent = s === status;
+                const isPast = ["draft", "ordered", "received"].indexOf(status) > i;
+                return (
+                  <div key={s} className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${isPast ? "bg-success" : isCurrent ? "bg-primary" : "bg-muted"}`} />
+                    <span className={`text-sm capitalize ${isCurrent ? "font-semibold text-foreground" : isPast ? "text-success" : "text-muted-foreground"}`}>
+                      {s}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Line Dialog */}
+      <Dialog open={addLineOpen} onOpenChange={setAddLineOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Line Item</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Product</Label>
+              <Select value={newProductId} onValueChange={handleProductSelect}>
+                <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+                <SelectContent>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.sku} — {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Quantity</Label>
+                <Input type="number" min={1} value={newQty} onChange={(e) => setNewQty(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Unit Price ({currentWorkspace?.currency})</Label>
+                <Input type="number" min={0} step="0.01" value={newPrice} onChange={(e) => setNewPrice(Number(e.target.value))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Discount %</Label>
+                <Input type="number" min={0} max={100} value={newDiscount} onChange={(e) => setNewDiscount(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>{currentWorkspace?.tax_label} Rate</Label>
+                <Select value={String(newTaxRate)} onValueChange={(v) => setNewTaxRate(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {taxRates.map((t) => (
+                      <SelectItem key={t.rate} value={String(t.rate)}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {newProductId && (
+              <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Line subtotal</span>
+                  <span className="font-mono">{calcLineTotal(newQty, newPrice, newDiscount).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{currentWorkspace?.tax_label} ({newTaxRate}%)</span>
+                  <span className="font-mono">{(calcLineTotal(newQty, newPrice, newDiscount) * newTaxRate / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-semibold border-t border-border pt-1">
+                  <span>Line total</span>
+                  <span className="font-mono">
+                    {(calcLineTotal(newQty, newPrice, newDiscount) * (1 + newTaxRate / 100)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddLineOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddLine} disabled={!newProductId || newQty < 1}>Add Item</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AppLayout>
+  );
+};
+
+export default PurchaseOrderForm;
