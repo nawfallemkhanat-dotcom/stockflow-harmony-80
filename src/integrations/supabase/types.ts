@@ -569,6 +569,57 @@ export type Database = {
           },
         ]
       }
+      quote_lines: {
+        Row: {
+          description: string | null
+          discount_pct: number
+          id: string
+          line_total: number
+          product_id: string | null
+          quantity: number
+          quote_id: string
+          tax_rate: number
+          unit_price: number
+        }
+        Insert: {
+          description?: string | null
+          discount_pct?: number
+          id?: string
+          line_total?: number
+          product_id?: string | null
+          quantity: number
+          quote_id: string
+          tax_rate?: number
+          unit_price: number
+        }
+        Update: {
+          description?: string | null
+          discount_pct?: number
+          id?: string
+          line_total?: number
+          product_id?: string | null
+          quantity?: number
+          quote_id?: string
+          tax_rate?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_lines_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotes: {
         Row: {
           created_at: string
