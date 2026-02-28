@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, ArrowLeft, Save, Banknote, Truck } from "lucide-react";
+import { Loader2, Plus, Trash2, ArrowLeft, Save, Banknote, Truck, FileText } from "lucide-react";
 
 interface SOLine {
   id?: string;
@@ -287,9 +287,21 @@ const SalesOrderForm = () => {
             </>
           )}
           {status === "paid" && (
-            <Button onClick={() => handleSave("shipped")} disabled={saving} className="bg-success hover:bg-success/90">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Truck className="w-4 h-4 mr-2" />}
-              Mark as Shipped
+            <>
+              <Button variant="outline" onClick={() => navigate(`/billing/invoices/new?from_so=${id}`)}>
+                <FileText className="w-4 h-4 mr-2" />
+                Generate Invoice
+              </Button>
+              <Button onClick={() => handleSave("shipped")} disabled={saving} className="bg-success hover:bg-success/90">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Truck className="w-4 h-4 mr-2" />}
+                Mark as Shipped
+              </Button>
+            </>
+          )}
+          {status === "shipped" && (
+            <Button variant="outline" onClick={() => navigate(`/billing/invoices/new?from_so=${id}`)}>
+              <FileText className="w-4 h-4 mr-2" />
+              Generate Invoice
             </Button>
           )}
         </div>
