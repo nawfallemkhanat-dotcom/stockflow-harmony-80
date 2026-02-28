@@ -17,54 +17,59 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 
 interface Product {
   id: string;
   sku: string;
   name: string;
+  category_id: string | null;
   category_name: string;
   unit: string;
   cost_price: number;
   sell_price: number;
   tax_rate: number;
+  tax_rate_id: string | null;
   stock: number;
   active: boolean;
 }
 
-interface Category {
-  id: string;
-  name: string;
-}
+interface Category { id: string; name: string; }
+interface TaxRate { id: string; name: string; rate: number; }
 
 const Products = () => {
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, currentRole } = useWorkspace();
+  const canEdit = currentRole === "owner" || currentRole === "admin" || currentRole === "staff";
+  const canDelete = currentRole === "owner" || currentRole === "admin";
+
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // New product form state
-  const [newSku, setNewSku] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newCategoryId, setNewCategoryId] = useState("");
-  const [newUnit, setNewUnit] = useState("pcs");
-  const [newCostPrice, setNewCostPrice] = useState(0);
-  const [newSellPrice, setNewSellPrice] = useState(0);
-  const [newTaxRate, setNewTaxRate] = useState("20");
+  // Form state
+  const [formSku, setFormSku] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formCategoryId, setFormCategoryId] = useState("");
+  const [formUnit, setFormUnit] = useState("pcs");
+  const [formCostPrice, setFormCostPrice] = useState(0);
+  const [formSellPrice, setFormSellPrice] = useState(0);
+  const [formTaxRateId, setFormTaxRateId] = useState("");
 
   const loadProducts = async () => {
     if (!currentWorkspace) return;
     const { data, error } = await supabase
       .from("products")
-      .select("id, sku, name, cost_price, sell_price, unit, active, category_id, categories(name), tax_rates(rate)")
+      .select("id, sku, name, cost_price, sell_price, unit, active, category_id, categories(name), tax_rate_id, tax_rates(id, rate)")
       .eq("workspace_id", currentWorkspace.id)
       .order("name");
 
     if (!error && data) {
-      // Get stock levels
       const { data: stockData } = await supabase
         .from("stock_levels")
         .select("product_id, quantity")
@@ -80,11 +85,13 @@ const Products = () => {
           id: p.id,
           sku: p.sku,
           name: p.name,
+          category_id: p.category_id,
           category_name: p.categories?.name || "—",
           unit: p.unit,
           cost_price: Number(p.cost_price),
           sell_price: Number(p.sell_price),
           tax_rate: p.tax_rates?.rate != null ? Number(p.tax_rates.rate) : 20,
+          tax_rate_id: p.tax_rate_id,
           stock: stockMap[p.id] || 0,
           active: p.active,
         }))
@@ -96,23 +103,25 @@ const Products = () => {
   useEffect(() => {
     if (!currentWorkspace) return;
     const loadAll = async () => {
-      const { data: cats } = await supabase
-        .from("categories")
-        .select("id, name")
-        .eq("workspace_id", currentWorkspace.id)
-        .order("name");
-      setCategories(cats || []);
+      const [catsRes, taxRes] = await Promise.all([
+        supabase.from("categories").select("id, name").eq("workspace_id", currentWorkspace.id).order("name"),
+        supabase.from("tax_rates").select("id, name, rate").eq("workspace_id", currentWorkspace.id).eq("active", true).order("rate", { ascending: false }),
+      ]);
+      setCategories(catsRes.data || []);
+      setTaxRates(taxRes.data || []);
       await loadProducts();
     };
     loadAll();
   }, [currentWorkspace]);
 
-  const filtered = products.filter(
-    (p) =>
+  const filtered = products.filter((p) => {
+    const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.sku.toLowerCase().includes(search.toLowerCase()) ||
-      p.category_name.toLowerCase().includes(search.toLowerCase())
-  );
+      p.category_name.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = categoryFilter === "all" || p.category_id === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
 
   const getStatus = (stock: number, active: boolean) => {
     if (!active) return "Inactive";
@@ -121,54 +130,65 @@ const Products = () => {
     return "In-Stock";
   };
 
-  const handleAdd = () => {
-    setNewSku("");
-    setNewName("");
-    setNewCategoryId("");
-    setNewUnit("pcs");
-    setNewCostPrice(0);
-    setNewSellPrice(0);
-    setNewTaxRate("20");
+  const resetForm = () => {
+    setFormSku(""); setFormName(""); setFormCategoryId(""); setFormUnit("pcs");
+    setFormCostPrice(0); setFormSellPrice(0); setFormTaxRateId("");
+    setEditingId(null);
+  };
+
+  const handleAdd = () => { resetForm(); setDialogOpen(true); };
+
+  const handleEdit = (p: Product) => {
+    setEditingId(p.id);
+    setFormSku(p.sku);
+    setFormName(p.name);
+    setFormCategoryId(p.category_id || "");
+    setFormUnit(p.unit);
+    setFormCostPrice(p.cost_price);
+    setFormSellPrice(p.sell_price);
+    setFormTaxRateId(p.tax_rate_id || "");
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!currentWorkspace || !newSku || !newName) {
+    if (!currentWorkspace || !formSku.trim() || !formName.trim()) {
       toast.error("SKU and Name are required");
+      return;
+    }
+    if (!formCategoryId) {
+      toast.error("Category is required");
       return;
     }
     setSaving(true);
 
-    // Find matching tax_rate id
-    let taxRateId: string | null = null;
-    const { data: taxRates } = await supabase
-      .from("tax_rates")
-      .select("id, rate")
-      .eq("workspace_id", currentWorkspace.id)
-      .eq("rate", Number(newTaxRate))
-      .eq("active", true)
-      .limit(1);
-    if (taxRates?.length) taxRateId = taxRates[0].id;
-
-    const { error } = await supabase.from("products").insert({
+    const payload = {
       workspace_id: currentWorkspace.id,
-      sku: newSku,
-      name: newName,
-      category_id: newCategoryId || null,
-      unit: newUnit,
-      cost_price: newCostPrice,
-      sell_price: newSellPrice,
-      tax_rate_id: taxRateId,
-    });
+      sku: formSku.trim(),
+      name: formName.trim(),
+      category_id: formCategoryId,
+      unit: formUnit,
+      cost_price: formCostPrice,
+      sell_price: formSellPrice,
+      tax_rate_id: formTaxRateId || null,
+    };
 
-    if (error) {
-      toast.error(error.message);
+    if (editingId) {
+      const { error } = await supabase.from("products").update(payload).eq("id", editingId);
+      if (error) toast.error(error.message);
+      else { toast.success("Product updated"); setDialogOpen(false); await loadProducts(); }
     } else {
-      toast.success("Product created");
-      setDialogOpen(false);
-      await loadProducts();
+      const { error } = await supabase.from("products").insert(payload);
+      if (error) toast.error(error.message);
+      else { toast.success("Product created"); setDialogOpen(false); await loadProducts(); }
     }
     setSaving(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this product?")) return;
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) toast.error(error.message);
+    else { toast.success("Product deleted"); await loadProducts(); }
   };
 
   if (loading) {
@@ -186,16 +206,39 @@ const Products = () => {
       <PageHeader
         title="Products"
         description="Manage your product catalog"
-        onAdd={handleAdd}
+        onAdd={canEdit ? handleAdd : undefined}
         addLabel="Add Product"
         searchValue={search}
         onSearchChange={setSearch}
       />
 
+      {/* Category Filter */}
+      <div className="mb-4 flex items-center gap-2 flex-wrap">
+        <Button
+          size="sm"
+          variant={categoryFilter === "all" ? "default" : "outline"}
+          onClick={() => setCategoryFilter("all")}
+        >
+          All
+        </Button>
+        {categories.map((c) => (
+          <Button
+            key={c.id}
+            size="sm"
+            variant={categoryFilter === c.id ? "default" : "outline"}
+            onClick={() => setCategoryFilter(c.id)}
+          >
+            {c.name}
+          </Button>
+        ))}
+      </div>
+
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         {filtered.length === 0 ? (
           <div className="px-5 py-10 text-center text-muted-foreground text-sm">
-            No products yet. Click "Add Product" to get started.
+            {products.length === 0
+              ? 'No products yet. Click "Add Product" to get started.'
+              : "No products match your filters."}
           </div>
         ) : (
           <Table>
@@ -209,11 +252,12 @@ const Products = () => {
                 <TableHead className="text-right">{currentWorkspace?.tax_label} %</TableHead>
                 <TableHead className="text-right">Stock</TableHead>
                 <TableHead>Status</TableHead>
+                {canEdit && <TableHead className="w-20"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((p) => (
-                <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50">
+                <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">{p.sku}</TableCell>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="text-muted-foreground">{p.category_name}</TableCell>
@@ -222,6 +266,20 @@ const Products = () => {
                   <TableCell className="text-right">{p.tax_rate}%</TableCell>
                   <TableCell className="text-right font-mono">{p.stock}</TableCell>
                   <TableCell><StatusBadge status={getStatus(p.stock, p.active)} /></TableCell>
+                  {canEdit && (
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(p)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        {canDelete && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(p.id)}>
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -232,24 +290,24 @@ const Products = () => {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add Product</DialogTitle>
+            <DialogTitle>{editingId ? "Edit Product" : "Add Product"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>SKU</Label>
-                <Input placeholder="e.g. WPX-009" value={newSku} onChange={(e) => setNewSku(e.target.value)} />
+                <Label>SKU *</Label>
+                <Input placeholder="e.g. WPX-009" value={formSku} onChange={(e) => setFormSku(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Name</Label>
-                <Input placeholder="Product name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+                <Label>Name *</Label>
+                <Input placeholder="Product name" value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={newCategoryId} onValueChange={setNewCategoryId}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <Label>Category *</Label>
+                <Select value={formCategoryId} onValueChange={setFormCategoryId}>
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                   <SelectContent>
                     {categories.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -259,7 +317,7 @@ const Products = () => {
               </div>
               <div className="space-y-2">
                 <Label>Unit</Label>
-                <Select value={newUnit} onValueChange={setNewUnit}>
+                <Select value={formUnit} onValueChange={setFormUnit}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pcs">Pieces</SelectItem>
@@ -273,22 +331,20 @@ const Products = () => {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Cost Price ({currentWorkspace?.currency})</Label>
-                <Input type="number" value={newCostPrice} onChange={(e) => setNewCostPrice(Number(e.target.value))} />
+                <Input type="number" value={formCostPrice} onChange={(e) => setFormCostPrice(Number(e.target.value))} />
               </div>
               <div className="space-y-2">
                 <Label>Sell Price ({currentWorkspace?.currency})</Label>
-                <Input type="number" value={newSellPrice} onChange={(e) => setNewSellPrice(Number(e.target.value))} />
+                <Input type="number" value={formSellPrice} onChange={(e) => setFormSellPrice(Number(e.target.value))} />
               </div>
               <div className="space-y-2">
                 <Label>{currentWorkspace?.tax_label} Rate</Label>
-                <Select value={newTaxRate} onValueChange={setNewTaxRate}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select value={formTaxRateId} onValueChange={setFormTaxRateId}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">0%</SelectItem>
-                    <SelectItem value="7">7%</SelectItem>
-                    <SelectItem value="10">10%</SelectItem>
-                    <SelectItem value="14">14%</SelectItem>
-                    <SelectItem value="20">20%</SelectItem>
+                    {taxRates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -298,7 +354,7 @@ const Products = () => {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-              Save Product
+              {editingId ? "Update" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
