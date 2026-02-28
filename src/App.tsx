@@ -13,6 +13,7 @@ import Products from "./pages/inventory/Products";
 import Warehouses from "./pages/inventory/Warehouses";
 import Movements from "./pages/inventory/Movements";
 import Invoices from "./pages/billing/Invoices";
+import InvoiceForm from "./pages/billing/InvoiceForm";
 import PurchaseOrdersList from "./pages/purchases/PurchaseOrdersList";
 import PurchaseOrderForm from "./pages/purchases/PurchaseOrderForm";
 import SuppliersList from "./pages/purchases/SuppliersList";
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/sales/orders/:id" element={<ProtectedRoute><SalesOrderForm /></ProtectedRoute>} />
               <Route path="/sales/customers" element={<ProtectedRoute><CustomersList /></ProtectedRoute>} />
               <Route path="/billing/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+              <Route path="/billing/invoices/:id" element={<ProtectedRoute><InvoiceForm /></ProtectedRoute>} />
               <Route path="/billing/quotes" element={<ProtectedRoute><Quotes /></ProtectedRoute>} />
               <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotes /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />

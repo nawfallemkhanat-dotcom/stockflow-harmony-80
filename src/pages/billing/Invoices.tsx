@@ -1,97 +1,159 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/shared/PageHeader";
 import StatusBadge from "@/components/shared/StatusBadge";
+import StatCard from "@/components/shared/StatCard";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Eye, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { Loader2, FileText, Banknote, Clock, AlertTriangle } from "lucide-react";
+import { format } from "date-fns";
 
-const mockInvoices = [
-  { id: "INV-2026-001", customer: "Maroc Tech SARL", date: "2026-02-28", dueDate: "2026-03-30", subtotal: 12500, tva: 2500, total: 15000, status: "Paid", currency: "MAD" },
-  { id: "INV-2026-002", customer: "Atlas Distribution", date: "2026-02-25", dueDate: "2026-03-27", subtotal: 8400, tva: 1680, total: 10080, status: "Pending", currency: "MAD" },
-  { id: "INV-2026-003", customer: "Sahara Electronics", date: "2026-02-20", dueDate: "2026-03-22", subtotal: 34000, tva: 6800, total: 40800, status: "Overdue", currency: "MAD" },
-  { id: "INV-2026-004", customer: "Rif Components", date: "2026-02-18", dueDate: "2026-03-20", subtotal: 5600, tva: 1120, total: 6720, status: "Draft", currency: "MAD" },
-  { id: "INV-2026-005", customer: "Casablanca Imports", date: "2026-02-15", dueDate: "2026-03-17", subtotal: 22000, tva: 4400, total: 26400, status: "Paid", currency: "MAD" },
-];
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  status: string;
+  subtotal: number;
+  tax_total: number;
+  discount_total: number;
+  total: number;
+  due_date: string | null;
+  created_at: string;
+  customers: { name: string } | null;
+}
 
 const Invoices = () => {
+  const navigate = useNavigate();
+  const { currentWorkspace } = useWorkspace();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  const filtered = mockInvoices.filter(
-    (inv) =>
-      inv.id.toLowerCase().includes(search.toLowerCase()) ||
-      inv.customer.toLowerCase().includes(search.toLowerCase())
-  );
+  const loadInvoices = async () => {
+    if (!currentWorkspace) return;
+    const { data, error } = await supabase
+      .from("invoices")
+      .select("id, invoice_number, status, subtotal, tax_total, discount_total, total, due_date, created_at, customers(name)")
+      .eq("workspace_id", currentWorkspace.id)
+      .order("created_at", { ascending: false });
+    if (!error) setInvoices((data || []) as any);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadInvoices(); }, [currentWorkspace]);
+
+  const filtered = invoices
+    .filter((inv) => statusFilter === "all" || inv.status === statusFilter)
+    .filter((inv) =>
+      inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
+      inv.customers?.name?.toLowerCase().includes(search.toLowerCase())
+    );
+
+  const totalValue = invoices.reduce((s, o) => s + Number(o.total), 0);
+  const paidValue = invoices.filter((o) => o.status === "paid").reduce((s, o) => s + Number(o.total), 0);
+  const pendingValue = invoices.filter((o) => o.status === "sent").reduce((s, o) => s + Number(o.total), 0);
+  const overdueValue = invoices.filter((o) => o.status === "overdue").reduce((s, o) => s + Number(o.total), 0);
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const filters = [
+    { label: "All", value: "all" },
+    { label: "Draft", value: "draft" },
+    { label: "Sent", value: "sent" },
+    { label: "Paid", value: "paid" },
+    { label: "Overdue", value: "overdue" },
+    { label: "Cancelled", value: "cancelled" },
+  ];
 
   return (
     <AppLayout>
       <PageHeader
         title="Invoices"
         description="Manage your invoices and billing"
+        onAdd={() => navigate("/billing/invoices/new")}
         addLabel="Create Invoice"
-        onAdd={() => {}}
         searchValue={search}
         onSearchChange={setSearch}
       />
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "Total", value: "99,000 MAD", sub: "5 invoices" },
-          { label: "Paid", value: "41,400 MAD", sub: "2 invoices" },
-          { label: "Pending", value: "10,080 MAD", sub: "1 invoice" },
-          { label: "Overdue", value: "40,800 MAD", sub: "1 invoice" },
-        ].map((s, i) => (
-          <div key={i} className="bg-card border border-border rounded-xl p-4">
-            <p className="text-xs text-muted-foreground font-medium">{s.label}</p>
-            <p className="text-xl font-bold text-foreground mt-1">{s.value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{s.sub}</p>
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <StatCard title={`Total (${currentWorkspace?.currency})`} value={totalValue.toFixed(0)} icon={FileText} />
+        <StatCard title="Paid" value={paidValue.toFixed(0)} icon={Banknote} />
+        <StatCard title="Pending" value={pendingValue.toFixed(0)} icon={Clock} />
+        <StatCard title="Overdue" value={overdueValue.toFixed(0)} icon={AlertTriangle} />
+      </div>
+
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {filters.map((f) => (
+          <Button
+            key={f.value}
+            variant={statusFilter === f.value ? "default" : "outline"}
+            size="sm"
+            onClick={() => setStatusFilter(f.value)}
+          >
+            {f.label}
+          </Button>
         ))}
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Invoice #</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Due Date</TableHead>
-              <TableHead className="text-right">Subtotal</TableHead>
-              <TableHead className="text-right">TVA 20%</TableHead>
-              <TableHead className="text-right">Total (MAD)</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-10"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((inv) => (
-              <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50">
-                <TableCell className="font-mono text-sm font-medium">{inv.id}</TableCell>
-                <TableCell className="font-medium">{inv.customer}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{inv.date}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{inv.dueDate}</TableCell>
-                <TableCell className="text-right font-mono">{inv.subtotal.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-mono">{inv.tva.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{inv.total.toLocaleString()}</TableCell>
-                <TableCell><StatusBadge status={inv.status} /></TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                </TableCell>
+        {filtered.length === 0 ? (
+          <div className="px-5 py-10 text-center text-muted-foreground text-sm">
+            {invoices.length === 0
+              ? 'No invoices yet. Click "Create Invoice" to create one.'
+              : "No invoices match the selected filter."}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice #</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Subtotal</TableHead>
+                <TableHead className="text-right">{currentWorkspace?.tax_label}</TableHead>
+                <TableHead className="text-right">Total ({currentWorkspace?.currency})</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Created</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((inv) => (
+                <TableRow
+                  key={inv.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => navigate(`/billing/invoices/${inv.id}`)}
+                >
+                  <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
+                  <TableCell>{inv.customers?.name || "—"}</TableCell>
+                  <TableCell><StatusBadge status={inv.status} /></TableCell>
+                  <TableCell className="text-right font-mono">{Number(inv.subtotal).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono">{Number(inv.tax_total).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{Number(inv.total).toFixed(2)}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {inv.due_date ? format(new Date(inv.due_date), "dd MMM yyyy") : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {format(new Date(inv.created_at), "dd MMM yyyy")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </div>
     </AppLayout>
   );
