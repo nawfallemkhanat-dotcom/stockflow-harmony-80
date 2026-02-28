@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
 import PageHeader from "@/components/shared/PageHeader";
 import StatusBadge from "@/components/shared/StatusBadge";
 import {
@@ -39,6 +40,7 @@ interface TaxRate { id: string; name: string; rate: number; }
 
 const Products = () => {
   const { currentWorkspace, currentRole } = useWorkspace();
+  const { user } = useAuth();
   const canEdit = currentRole === "owner" || currentRole === "admin" || currentRole === "staff";
   const canDelete = currentRole === "owner" || currentRole === "admin";
 
@@ -60,6 +62,7 @@ const Products = () => {
   const [formCostPrice, setFormCostPrice] = useState(0);
   const [formSellPrice, setFormSellPrice] = useState(0);
   const [formTaxRateId, setFormTaxRateId] = useState("");
+  const [formInitialQty, setFormInitialQty] = useState(0);
 
   const loadProducts = async () => {
     if (!currentWorkspace) return;
@@ -132,7 +135,7 @@ const Products = () => {
 
   const resetForm = () => {
     setFormSku(""); setFormName(""); setFormCategoryId(""); setFormUnit("pcs");
-    setFormCostPrice(0); setFormSellPrice(0); setFormTaxRateId("");
+    setFormCostPrice(0); setFormSellPrice(0); setFormTaxRateId(""); setFormInitialQty(0);
     setEditingId(null);
   };
 
@@ -177,9 +180,33 @@ const Products = () => {
       if (error) toast.error(error.message);
       else { toast.success("Product updated"); setDialogOpen(false); await loadProducts(); }
     } else {
-      const { error } = await supabase.from("products").insert(payload);
+      const { data: newProduct, error } = await supabase.from("products").insert(payload).select("id").single();
       if (error) toast.error(error.message);
-      else { toast.success("Product created"); setDialogOpen(false); await loadProducts(); }
+      else {
+        // Create initial stock movement if quantity > 0
+        if (formInitialQty > 0 && newProduct) {
+          // Get first warehouse for this workspace
+          const { data: warehouses } = await supabase
+            .from("warehouses")
+            .select("id")
+            .eq("workspace_id", currentWorkspace.id)
+            .limit(1);
+          if (warehouses && warehouses.length > 0) {
+            await supabase.from("stock_movements").insert({
+              workspace_id: currentWorkspace.id,
+              product_id: newProduct.id,
+              quantity: formInitialQty,
+              movement_type: "IN" as const,
+              to_warehouse_id: warehouses[0].id,
+              created_by: user?.id || "",
+              notes: "Initial stock",
+            });
+          }
+        }
+        toast.success("Product created");
+        setDialogOpen(false);
+        await loadProducts();
+      }
     }
     setSaving(false);
   };
@@ -349,6 +376,12 @@ const Products = () => {
                 </Select>
               </div>
             </div>
+            {!editingId && (
+              <div className="space-y-2">
+                <Label>Initial Quantity</Label>
+                <Input type="number" min={0} value={formInitialQty} onChange={(e) => setFormInitialQty(Number(e.target.value))} />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
