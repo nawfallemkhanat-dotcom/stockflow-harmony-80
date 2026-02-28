@@ -11,9 +11,12 @@ import {
   Settings,
   ChevronDown,
   Box,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 
 interface NavSection {
   label: string;
@@ -63,6 +66,8 @@ const navigation: NavSection[] = [
 
 export const AppSidebar = () => {
   const location = useLocation();
+  const { user, signOut } = useAuth();
+  const { currentWorkspace, currentRole } = useWorkspace();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     Inventory: true,
     Billing: true,
@@ -164,14 +169,23 @@ export const AppSidebar = () => {
       <div className="p-4 border-t border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-semibold text-sidebar-primary">
-            SF
+            {(user?.user_metadata?.full_name || user?.email || "U").charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-sidebar-accent-foreground truncate">
-              Demo Workspace
+              {currentWorkspace?.name || "Workspace"}
             </p>
-            <p className="text-xs text-sidebar-muted truncate">Owner</p>
+            <p className="text-xs text-sidebar-muted truncate capitalize">
+              {currentRole || "member"}
+            </p>
           </div>
+          <button
+            onClick={signOut}
+            className="text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>
