@@ -3,6 +3,11 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { WorkspaceProvider } from "@/contexts/WorkspaceContext";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/inventory/Products";
 import Warehouses from "./pages/inventory/Warehouses";
@@ -27,22 +32,28 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/inventory/products" element={<Products />} />
-          <Route path="/inventory/warehouses" element={<Warehouses />} />
-          <Route path="/inventory/movements" element={<Movements />} />
-          <Route path="/purchases/orders" element={<PurchaseOrders />} />
-          <Route path="/purchases/suppliers" element={<Suppliers />} />
-          <Route path="/sales/orders" element={<SalesOrders />} />
-          <Route path="/sales/customers" element={<Customers />} />
-          <Route path="/billing/invoices" element={<Invoices />} />
-          <Route path="/billing/quotes" element={<Quotes />} />
-          <Route path="/billing/credit-notes" element={<CreditNotes />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <WorkspaceProvider>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/inventory/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+              <Route path="/inventory/warehouses" element={<ProtectedRoute><Warehouses /></ProtectedRoute>} />
+              <Route path="/inventory/movements" element={<ProtectedRoute><Movements /></ProtectedRoute>} />
+              <Route path="/purchases/orders" element={<ProtectedRoute><PurchaseOrders /></ProtectedRoute>} />
+              <Route path="/purchases/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
+              <Route path="/sales/orders" element={<ProtectedRoute><SalesOrders /></ProtectedRoute>} />
+              <Route path="/sales/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+              <Route path="/billing/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+              <Route path="/billing/quotes" element={<ProtectedRoute><Quotes /></ProtectedRoute>} />
+              <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotes /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </WorkspaceProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
