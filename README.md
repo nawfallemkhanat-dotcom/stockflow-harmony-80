@@ -59,6 +59,31 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Electron (desktop app)
+
+## Desktop App (Electron)
+
+### Development
+
+```sh
+npm run electron:dev
+```
+
+This starts the Vite dev server and opens the Electron window pointing to `http://localhost:5173`.
+
+### Build Windows Installer
+
+```sh
+npm run electron:dist
+```
+
+This builds the Vite app and packages it into a Windows installer at `release/MySaaS Setup.exe`.
+
+### Build (without installer)
+
+```sh
+npm run electron:pack
+```
 
 ## How can I deploy this project?
 
