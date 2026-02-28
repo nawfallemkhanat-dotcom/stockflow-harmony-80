@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import WorkspaceSettings from "./WorkspaceSettings";
 import MemberManagement from "./MemberManagement";
 import TaxRateManagement from "./TaxRateManagement";
+import CategoryManagement from "./CategoryManagement";
 
 const SettingsPage = () => {
   return (
@@ -18,6 +19,7 @@ const SettingsPage = () => {
           <TabsTrigger value="workspace">Workspace</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="tax-rates">Tax Rates</TabsTrigger>
+          <TabsTrigger value="categories">Categories</TabsTrigger>
         </TabsList>
 
         <TabsContent value="workspace">
@@ -28,6 +30,9 @@ const SettingsPage = () => {
         </TabsContent>
         <TabsContent value="tax-rates">
           <TaxRateManagement />
+        </TabsContent>
+        <TabsContent value="categories">
+          <CategoryManagement />
         </TabsContent>
       </Tabs>
     </AppLayout>
