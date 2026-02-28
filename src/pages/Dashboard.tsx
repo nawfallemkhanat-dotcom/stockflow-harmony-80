@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import StatCard from "@/components/shared/StatCard";
 import StatusBadge from "@/components/shared/StatusBadge";
@@ -8,6 +9,8 @@ import {
   AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
+  FileText,
+  Receipt,
 } from "lucide-react";
 import {
   Table,
@@ -17,22 +20,116 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { format } from "date-fns";
 
-const recentMovements = [
-  { id: "MOV-001", product: "Widget Pro X", type: "IN", qty: 500, warehouse: "Main Warehouse", date: "2026-02-28" },
-  { id: "MOV-002", product: "Cable USB-C 2m", type: "OUT", qty: 120, warehouse: "Store Front", date: "2026-02-28" },
-  { id: "MOV-003", product: "Sensor Module A", type: "TRANSFER", qty: 50, warehouse: "Main → Store", date: "2026-02-27" },
-  { id: "MOV-004", product: "Power Adapter 65W", type: "IN", qty: 200, warehouse: "Main Warehouse", date: "2026-02-27" },
-  { id: "MOV-005", product: "LED Panel 40W", type: "OUT", qty: 80, warehouse: "Store Front", date: "2026-02-26" },
-];
-
-const lowStockItems = [
-  { product: "Connector RJ45", current: 12, reorder: 50, warehouse: "Main Warehouse" },
-  { product: "Thermal Paste 5g", current: 3, reorder: 25, warehouse: "Store Front" },
-  { product: "Fan 120mm", current: 8, reorder: 30, warehouse: "Main Warehouse" },
-];
+interface DashboardData {
+  totalProducts: number;
+  stockValue: number;
+  pendingPOs: number;
+  pendingSOs: number;
+  lowStockCount: number;
+  invoiceRevenue: number;
+  recentMovements: any[];
+  lowStockItems: any[];
+  recentInvoices: any[];
+}
 
 const Dashboard = () => {
+  const { currentWorkspace } = useWorkspace();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData>({
+    totalProducts: 0,
+    stockValue: 0,
+    pendingPOs: 0,
+    pendingSOs: 0,
+    lowStockCount: 0,
+    invoiceRevenue: 0,
+    recentMovements: [],
+    lowStockItems: [],
+    recentInvoices: [],
+  });
+
+  useEffect(() => {
+    if (!currentWorkspace) return;
+    const wsId = currentWorkspace.id;
+
+    const load = async () => {
+      const [
+        productsRes,
+        stockRes,
+        poRes,
+        soRes,
+        movementsRes,
+        invoicesRes,
+      ] = await Promise.all([
+        supabase.from("products").select("id, name, cost_price, sell_price, reorder_level").eq("workspace_id", wsId).eq("active", true),
+        supabase.from("stock_levels").select("quantity, product_id, warehouse_id, products(name, reorder_level), warehouses(name)").eq("workspace_id", wsId),
+        supabase.from("purchase_orders").select("id, status").eq("workspace_id", wsId).in("status", ["draft", "ordered"]),
+        supabase.from("sales_orders").select("id, status").eq("workspace_id", wsId).in("status", ["draft", "paid"]),
+        supabase.from("stock_movements").select("id, movement_type, quantity, created_at, notes, reference, products(name), from_warehouse:warehouses!stock_movements_from_warehouse_id_fkey(name), to_warehouse:warehouses!stock_movements_to_warehouse_id_fkey(name)").eq("workspace_id", wsId).order("created_at", { ascending: false }).limit(5),
+        supabase.from("invoices").select("id, invoice_number, status, total, created_at, customers(name)").eq("workspace_id", wsId).order("created_at", { ascending: false }).limit(5),
+      ]);
+
+      const products = productsRes.data || [];
+      const stocks = (stockRes.data || []) as any[];
+      const movements = (movementsRes.data || []) as any[];
+      const invoices = (invoicesRes.data || []) as any[];
+
+      // Stock value: sum of quantity * cost_price per product
+      const productCostMap = new Map(products.map((p) => [p.id, Number(p.sell_price)]));
+      const stockValue = stocks.reduce((sum, s) => {
+        const price = productCostMap.get(s.product_id) || 0;
+        return sum + s.quantity * price;
+      }, 0);
+
+      // Low stock: stock_levels where quantity < reorder_level
+      const lowStockItems = stocks
+        .filter((s: any) => s.products && s.quantity < (s.products.reorder_level || 10))
+        .map((s: any) => ({
+          product: s.products?.name || "—",
+          current: s.quantity,
+          reorder: s.products?.reorder_level || 10,
+          warehouse: s.warehouses?.name || "—",
+        }))
+        .slice(0, 5);
+
+      // Invoice revenue (paid)
+      const invoiceRevenue = invoices
+        .filter((i: any) => i.status === "paid")
+        .reduce((sum: number, i: any) => sum + Number(i.total), 0);
+
+      setData({
+        totalProducts: products.length,
+        stockValue,
+        pendingPOs: (poRes.data || []).length,
+        pendingSOs: (soRes.data || []).length,
+        lowStockCount: lowStockItems.length,
+        invoiceRevenue,
+        recentMovements: movements,
+        lowStockItems,
+        recentInvoices: invoices,
+      });
+      setLoading(false);
+    };
+
+    load();
+  }, [currentWorkspace]);
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const currency = currentWorkspace?.currency || "MAD";
+
   return (
     <AppLayout>
       <div className="space-y-8">
@@ -45,33 +142,33 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Products"
-            value="1,247"
-            change="+23 this month"
-            changeType="positive"
+            value={String(data.totalProducts)}
+            change={`${currency} ${data.stockValue.toLocaleString()} stock value`}
+            changeType="neutral"
             icon={Package}
             delay={0}
           />
           <StatCard
-            title="Stock Value"
-            value="2,340,000 MAD"
-            change="+5.2% from last month"
-            changeType="positive"
-            icon={DollarSign}
+            title="Pending Orders"
+            value={String(data.pendingPOs + data.pendingSOs)}
+            change={`${data.pendingPOs} purchase, ${data.pendingSOs} sales`}
+            changeType="neutral"
+            icon={ShoppingCart}
             delay={100}
           />
           <StatCard
-            title="Pending Orders"
-            value="34"
-            change="12 purchase, 22 sales"
-            changeType="neutral"
-            icon={ShoppingCart}
+            title="Revenue (Paid)"
+            value={`${data.invoiceRevenue.toLocaleString()} ${currency}`}
+            change="From paid invoices"
+            changeType="positive"
+            icon={DollarSign}
             delay={200}
           />
           <StatCard
             title="Low Stock Alerts"
-            value="7"
-            change="3 critical"
-            changeType="negative"
+            value={String(data.lowStockCount)}
+            change={data.lowStockCount > 0 ? "Items below reorder level" : "All stock healthy"}
+            changeType={data.lowStockCount > 0 ? "negative" : "positive"}
             icon={AlertTriangle}
             delay={300}
           />
@@ -83,65 +180,115 @@ const Dashboard = () => {
             <div className="px-5 py-4 border-b border-border">
               <h2 className="font-semibold text-foreground">Recent Stock Movements</h2>
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead>Warehouse</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentMovements.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{m.id}</TableCell>
-                    <TableCell className="font-medium">{m.product}</TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium">
-                        {m.type === "IN" && <ArrowDownRight className="w-3 h-3 text-success" />}
-                        {m.type === "OUT" && <ArrowUpRight className="w-3 h-3 text-destructive" />}
-                        {m.type === "TRANSFER" && <ArrowUpRight className="w-3 h-3 text-primary" />}
-                        {m.type}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{m.qty}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{m.warehouse}</TableCell>
+            {data.recentMovements.length === 0 ? (
+              <div className="px-5 py-10 text-center text-muted-foreground text-sm">
+                No stock movements yet.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Date</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {data.recentMovements.map((m: any) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-medium">{m.products?.name || "—"}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium">
+                          {m.movement_type === "IN" && <ArrowDownRight className="w-3 h-3 text-success" />}
+                          {m.movement_type === "OUT" && <ArrowUpRight className="w-3 h-3 text-destructive" />}
+                          {m.movement_type === "TRANSFER" && <ArrowUpRight className="w-3 h-3 text-primary" />}
+                          {m.movement_type}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{m.quantity}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {m.movement_type === "TRANSFER"
+                          ? `${m.from_warehouse?.name || "?"} → ${m.to_warehouse?.name || "?"}`
+                          : m.movement_type === "IN"
+                          ? m.to_warehouse?.name || "—"
+                          : m.from_warehouse?.name || "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {format(new Date(m.created_at), "dd MMM")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
 
-          {/* Low Stock Alerts */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden opacity-0 animate-fade-in" style={{ animationDelay: "500ms" }}>
-            <div className="px-5 py-4 border-b border-border flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              <h2 className="font-semibold text-foreground">Low Stock Alerts</h2>
-            </div>
-            <div className="divide-y divide-border">
-              {lowStockItems.map((item, i) => (
-                <div key={i} className="px-5 py-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground">{item.product}</p>
-                    <StatusBadge status={item.current <= 5 ? "out-of-stock" : "low-stock"} />
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-xs text-muted-foreground">{item.warehouse}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.current} / {item.reorder} units
-                    </p>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-warning transition-all"
-                      style={{ width: `${Math.min((item.current / item.reorder) * 100, 100)}%` }}
-                    />
-                  </div>
+          {/* Right column */}
+          <div className="space-y-6">
+            {/* Low Stock Alerts */}
+            <div className="bg-card border border-border rounded-xl overflow-hidden opacity-0 animate-fade-in" style={{ animationDelay: "500ms" }}>
+              <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-warning" />
+                <h2 className="font-semibold text-foreground">Low Stock Alerts</h2>
+              </div>
+              {data.lowStockItems.length === 0 ? (
+                <div className="px-5 py-6 text-center text-muted-foreground text-sm">
+                  All products above reorder levels ✓
                 </div>
-              ))}
+              ) : (
+                <div className="divide-y divide-border">
+                  {data.lowStockItems.map((item: any, i: number) => (
+                    <div key={i} className="px-5 py-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-foreground">{item.product}</p>
+                        <StatusBadge status={item.current <= 5 ? "out-of-stock" : "low-stock"} />
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-muted-foreground">{item.warehouse}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.current} / {item.reorder} units
+                        </p>
+                      </div>
+                      <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-warning transition-all"
+                          style={{ width: `${Math.min((item.current / item.reorder) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recent Invoices */}
+            <div className="bg-card border border-border rounded-xl overflow-hidden opacity-0 animate-fade-in" style={{ animationDelay: "600ms" }}>
+              <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-primary" />
+                <h2 className="font-semibold text-foreground">Recent Invoices</h2>
+              </div>
+              {data.recentInvoices.length === 0 ? (
+                <div className="px-5 py-6 text-center text-muted-foreground text-sm">
+                  No invoices yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {data.recentInvoices.map((inv: any) => (
+                    <div key={inv.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground font-mono">{inv.invoice_number}</p>
+                        <p className="text-xs text-muted-foreground">{inv.customers?.name || "—"}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold font-mono">{Number(inv.total).toLocaleString()} {currency}</p>
+                        <StatusBadge status={inv.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
