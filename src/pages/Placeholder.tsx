@@ -11,4 +11,3 @@ const ComingSoon = ({ title }: { title: string }) => (
 
 export const Quotes = () => <ComingSoon title="Quotes" />;
 export const CreditNotes = () => <ComingSoon title="Credit Notes" />;
-export const SettingsPage = () => <ComingSoon title="Settings" />;

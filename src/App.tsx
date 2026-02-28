@@ -22,8 +22,8 @@ import CustomersList from "./pages/sales/CustomersList";
 import {
   Quotes,
   CreditNotes,
-  SettingsPage,
 } from "./pages/Placeholder";
+import SettingsPage from "./pages/settings/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
