@@ -20,10 +20,9 @@ import SuppliersList from "./pages/purchases/SuppliersList";
 import SalesOrdersList from "./pages/sales/SalesOrdersList";
 import SalesOrderForm from "./pages/sales/SalesOrderForm";
 import CustomersList from "./pages/sales/CustomersList";
-import {
-  Quotes,
-  CreditNotes,
-} from "./pages/Placeholder";
+import { Quotes } from "./pages/Placeholder";
+import CreditNotesList from "./pages/billing/CreditNotesList";
+import CreditNoteForm from "./pages/billing/CreditNoteForm";
 import SettingsPage from "./pages/settings/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -54,7 +53,8 @@ const App = () => (
               <Route path="/billing/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
               <Route path="/billing/invoices/:id" element={<ProtectedRoute><InvoiceForm /></ProtectedRoute>} />
               <Route path="/billing/quotes" element={<ProtectedRoute><Quotes /></ProtectedRoute>} />
-              <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotes /></ProtectedRoute>} />
+              <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotesList /></ProtectedRoute>} />
+              <Route path="/billing/credit-notes/:id" element={<ProtectedRoute><CreditNoteForm /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
