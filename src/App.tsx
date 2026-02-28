@@ -16,9 +16,10 @@ import Invoices from "./pages/billing/Invoices";
 import PurchaseOrdersList from "./pages/purchases/PurchaseOrdersList";
 import PurchaseOrderForm from "./pages/purchases/PurchaseOrderForm";
 import SuppliersList from "./pages/purchases/SuppliersList";
+import SalesOrdersList from "./pages/sales/SalesOrdersList";
+import SalesOrderForm from "./pages/sales/SalesOrderForm";
+import CustomersList from "./pages/sales/CustomersList";
 import {
-  SalesOrders,
-  Customers,
   Quotes,
   CreditNotes,
   SettingsPage,
@@ -46,8 +47,9 @@ const App = () => (
               <Route path="/purchases/orders" element={<ProtectedRoute><PurchaseOrdersList /></ProtectedRoute>} />
               <Route path="/purchases/orders/:id" element={<ProtectedRoute><PurchaseOrderForm /></ProtectedRoute>} />
               <Route path="/purchases/suppliers" element={<ProtectedRoute><SuppliersList /></ProtectedRoute>} />
-              <Route path="/sales/orders" element={<ProtectedRoute><SalesOrders /></ProtectedRoute>} />
-              <Route path="/sales/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+              <Route path="/sales/orders" element={<ProtectedRoute><SalesOrdersList /></ProtectedRoute>} />
+              <Route path="/sales/orders/:id" element={<ProtectedRoute><SalesOrderForm /></ProtectedRoute>} />
+              <Route path="/sales/customers" element={<ProtectedRoute><CustomersList /></ProtectedRoute>} />
               <Route path="/billing/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
               <Route path="/billing/quotes" element={<ProtectedRoute><Quotes /></ProtectedRoute>} />
               <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotes /></ProtectedRoute>} />
