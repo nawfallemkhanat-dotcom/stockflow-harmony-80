@@ -21,7 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Trash2, ArrowLeft, Save, Send, CheckCircle,
-  XCircle, ShoppingCart,
+  XCircle, ShoppingCart, FileDown,
 } from "lucide-react";
 
 interface QLine {
@@ -52,6 +52,7 @@ const QuoteForm = () => {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [quoteNumber, setQuoteNumber] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [validUntil, setValidUntil] = useState("");
@@ -314,6 +315,24 @@ const QuoteForm = () => {
     setSaving(false);
   };
 
+  const handleExportPDF = async () => {
+    if (!id || isNew) return;
+    setExporting(true);
+    try {
+      const res = await supabase.functions.invoke("generate-quote-pdf", {
+        body: { quote_id: id },
+      });
+      if (res.error) throw res.error;
+      const blob = new Blob([res.data.html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, "_blank");
+      if (w) { w.onload = () => { setTimeout(() => w.print(), 500); }; }
+    } catch (err: any) {
+      toast.error(err.message || "PDF export failed");
+    }
+    setExporting(false);
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -346,6 +365,12 @@ const QuoteForm = () => {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {!isNew && (
+            <Button variant="outline" onClick={handleExportPDF} disabled={exporting}>
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />}
+              Export PDF
+            </Button>
+          )}
           {isEditable && (
             <>
               <Button variant="outline" onClick={() => handleSave()} disabled={saving}>
