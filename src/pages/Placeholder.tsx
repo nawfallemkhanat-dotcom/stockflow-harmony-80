@@ -9,8 +9,6 @@ const ComingSoon = ({ title }: { title: string }) => (
   </AppLayout>
 );
 
-export const PurchaseOrders = () => <ComingSoon title="Purchase Orders" />;
-export const Suppliers = () => <ComingSoon title="Suppliers" />;
 export const SalesOrders = () => <ComingSoon title="Sales Orders" />;
 export const Customers = () => <ComingSoon title="Customers" />;
 export const Quotes = () => <ComingSoon title="Quotes" />;
