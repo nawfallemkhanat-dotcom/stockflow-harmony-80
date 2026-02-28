@@ -43,6 +43,54 @@ export type Database = {
           },
         ]
       }
+      credit_note_lines: {
+        Row: {
+          credit_note_id: string
+          description: string | null
+          id: string
+          line_total: number
+          product_id: string | null
+          quantity: number
+          tax_rate: number
+          unit_price: number
+        }
+        Insert: {
+          credit_note_id: string
+          description?: string | null
+          id?: string
+          line_total?: number
+          product_id?: string | null
+          quantity: number
+          tax_rate?: number
+          unit_price: number
+        }
+        Update: {
+          credit_note_id?: string
+          description?: string | null
+          id?: string
+          line_total?: number
+          product_id?: string | null
+          quantity?: number
+          tax_rate?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_note_lines_credit_note_id_fkey"
+            columns: ["credit_note_id"]
+            isOneToOne: false
+            referencedRelation: "credit_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_note_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_notes: {
         Row: {
           created_at: string

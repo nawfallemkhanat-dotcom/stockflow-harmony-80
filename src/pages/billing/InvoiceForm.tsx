@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, ArrowLeft, Save, Send, Banknote, FileDown, XCircle } from "lucide-react";
+import { Loader2, Plus, Trash2, ArrowLeft, Save, Send, Banknote, FileDown, XCircle, RotateCcw } from "lucide-react";
 
 interface InvLine {
   id?: string;
@@ -389,6 +389,12 @@ const InvoiceForm = () => {
             <Button onClick={() => handleSave("paid")} disabled={saving}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Banknote className="w-4 h-4 mr-2" />}
               Mark as Paid
+            </Button>
+          )}
+          {!isNew && status === "paid" && (
+            <Button variant="outline" onClick={() => navigate(`/billing/credit-notes/new?from_invoice=${id}`)}>
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Credit Note
             </Button>
           )}
           {(status === "draft" || status === "sent") && !isNew && (
