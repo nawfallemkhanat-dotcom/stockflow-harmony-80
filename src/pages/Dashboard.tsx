@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import StatCard from "@/components/shared/StatCard";
 import StatusBadge from "@/components/shared/StatusBadge";
@@ -11,7 +11,17 @@ import {
   ArrowDownRight,
   FileText,
   Receipt,
+  TrendingUp,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import {
   Table,
   TableBody,
@@ -35,6 +45,7 @@ interface DashboardData {
   recentMovements: any[];
   lowStockItems: any[];
   recentInvoices: any[];
+  allPaidInvoices: any[];
 }
 
 const Dashboard = () => {
@@ -50,6 +61,7 @@ const Dashboard = () => {
     recentMovements: [],
     lowStockItems: [],
     recentInvoices: [],
+    allPaidInvoices: [],
   });
 
   useEffect(() => {
@@ -64,6 +76,7 @@ const Dashboard = () => {
         soRes,
         movementsRes,
         invoicesRes,
+        allPaidRes,
       ] = await Promise.all([
         supabase.from("products").select("id, name, cost_price, sell_price, reorder_level").eq("workspace_id", wsId).eq("active", true),
         supabase.from("stock_levels").select("quantity, product_id, warehouse_id, products(name, reorder_level), warehouses(name)").eq("workspace_id", wsId),
@@ -71,12 +84,14 @@ const Dashboard = () => {
         supabase.from("sales_orders").select("id, status").eq("workspace_id", wsId).in("status", ["draft", "paid"]),
         supabase.from("stock_movements").select("id, movement_type, quantity, created_at, notes, reference, products(name), from_warehouse:warehouses!stock_movements_from_warehouse_id_fkey(name), to_warehouse:warehouses!stock_movements_to_warehouse_id_fkey(name)").eq("workspace_id", wsId).order("created_at", { ascending: false }).limit(5),
         supabase.from("invoices").select("id, invoice_number, status, total, created_at, customers(name)").eq("workspace_id", wsId).order("created_at", { ascending: false }).limit(5),
+        supabase.from("invoices").select("total, created_at").eq("workspace_id", wsId).eq("status", "paid").order("created_at"),
       ]);
 
       const products = productsRes.data || [];
       const stocks = (stockRes.data || []) as any[];
       const movements = (movementsRes.data || []) as any[];
       const invoices = (invoicesRes.data || []) as any[];
+      const allPaid = (allPaidRes.data || []) as any[];
 
       // Stock value: sum of quantity * cost_price per product
       const productCostMap = new Map(products.map((p) => [p.id, Number(p.sell_price)]));
@@ -111,12 +126,36 @@ const Dashboard = () => {
         recentMovements: movements,
         lowStockItems,
         recentInvoices: invoices,
+        allPaidInvoices: allPaid,
       });
       setLoading(false);
     };
 
     load();
   }, [currentWorkspace]);
+
+  const currency = currentWorkspace?.currency || "MAD";
+
+  // Build monthly revenue chart data from paid invoices (last 12 months)
+  const revenueChartData = useMemo(() => {
+    const now = new Date();
+    const months: { key: string; label: string }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        label: format(d, "MMM yyyy"),
+      });
+    }
+    const monthMap: Record<string, number> = {};
+    months.forEach((m) => (monthMap[m.key] = 0));
+    data.allPaidInvoices.forEach((inv: any) => {
+      const d = new Date(inv.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (monthMap[key] !== undefined) monthMap[key] += Number(inv.total);
+    });
+    return months.map((m) => ({ month: m.label, revenue: monthMap[m.key] }));
+  }, [data.allPaidInvoices]);
 
   if (loading) {
     return (
@@ -127,8 +166,6 @@ const Dashboard = () => {
       </AppLayout>
     );
   }
-
-  const currency = currentWorkspace?.currency || "MAD";
 
   return (
     <AppLayout>
@@ -172,6 +209,56 @@ const Dashboard = () => {
             icon={AlertTriangle}
             delay={300}
           />
+        </div>
+
+        {/* Monthly Revenue Chart */}
+        <div className="bg-card border border-border rounded-xl overflow-hidden opacity-0 animate-fade-in" style={{ animationDelay: "350ms" }}>
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold text-foreground">Monthly Revenue</h2>
+            <span className="text-xs text-muted-foreground ml-auto">Last 12 months ({currency})</span>
+          </div>
+          <div className="p-5" style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "hsl(var(--border))" }}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontSize: 13,
+                  }}
+                  formatter={(value: number) => [`${value.toLocaleString()} ${currency}`, "Revenue"]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  fill="url(#revenueGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
