@@ -58,7 +58,7 @@ const App = () => (
               <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotesList /></ProtectedRoute>} />
               <Route path="/billing/credit-notes/:id" element={<ProtectedRoute><CreditNoteForm /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-              <Route path="*" element={<NotFound />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </WorkspaceProvider>
         </AuthProvider>
