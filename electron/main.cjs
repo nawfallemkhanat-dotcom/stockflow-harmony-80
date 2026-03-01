@@ -23,11 +23,14 @@ function createWindow() {
   });
 
   if (isDev) {
-    const devUrl = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
+    const devUrl = process.env.VITE_DEV_SERVER_URL || "http://localhost:8080";
     win.loadURL(devUrl);
     win.webContents.openDevTools();
   } else {
-    win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+    const indexPath = path.join(app.getAppPath(), "dist", "index.html");
+    win.loadFile(indexPath).catch((err) => {
+      console.error("Failed to load index.html from:", indexPath, err);
+    });
   }
 }
 
