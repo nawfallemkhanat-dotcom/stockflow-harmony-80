@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Box, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 type AuthMode = "login" | "register" | "reset";
 
@@ -71,9 +72,7 @@ const Auth = () => {
       <div className="w-full max-w-sm space-y-6">
         {/* Logo */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary mx-auto">
-            <Box className="w-6 h-6 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="StockFlow" className="w-12 h-12 rounded-xl mx-auto" />
           <h1 className="text-2xl font-bold text-foreground tracking-tight">StockFlow</h1>
           <p className="text-sm text-muted-foreground">
             {mode === "login" && "Sign in to your account"}

@@ -14,6 +14,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { useState } from "react";
+import logo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -86,9 +87,7 @@ export const AppSidebar = () => {
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <Box className="w-4.5 h-4.5 text-sidebar-primary-foreground" />
-          </div>
+          <img src={logo} alt="StockFlow" className="w-8 h-8 rounded-lg" />
           <span className="text-lg font-bold text-sidebar-accent-foreground tracking-tight">
             StockFlow
           </span>
