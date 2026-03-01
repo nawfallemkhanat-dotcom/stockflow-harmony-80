@@ -8,7 +8,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     title: "MySaaS",
-    icon: path.join(__dirname, "..", "public", "favicon.ico"),
+    icon: path.join(__dirname, "..", "public", "favicon.png"),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
