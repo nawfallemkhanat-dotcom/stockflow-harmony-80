@@ -8,7 +8,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     title: "StockFlow",
-    icon: path.join(app.getAppPath(), "assets", "icon.ico"),
+    icon: path.join(app.getAppPath(), "assets", "icon.png"),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

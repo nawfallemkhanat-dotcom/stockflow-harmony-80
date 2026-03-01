@@ -32,11 +32,11 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.png"
     },
     "nsis": {
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
+      "installerIcon": "assets/icon.png",
+      "uninstallerIcon": "assets/icon.png",
       "oneClick": true,
       "perMachine": false
     }
