@@ -18,6 +18,7 @@ import logo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface NavSection {
   label: string;
@@ -185,6 +186,7 @@ export const AppSidebar = () => {
           >
             <LogOut className="w-4 h-4" />
           </button>
+          <ThemeToggle className="text-sidebar-muted hover:text-sidebar-accent-foreground hover:bg-sidebar-accent h-8 w-8" />
         </div>
       </div>
     </aside>
