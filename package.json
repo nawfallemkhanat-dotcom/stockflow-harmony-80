@@ -13,9 +13,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rimraf dist release",
+    "generate-ico": "node scripts/generate-ico.cjs",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:pack": "vite build && electron-builder",
-    "electron:dist": "npm run clean && vite build && electron-builder --publish never"
+    "electron:dist": "npm run clean && npm run generate-ico && vite build && electron-builder --publish never"
   },
   "build": {
     "appId": "com.stockflow.desktop",
@@ -32,11 +33,11 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
-      "installerIcon": "assets/icon.png",
-      "uninstallerIcon": "assets/icon.png",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
       "oneClick": true,
       "perMachine": false
     }
