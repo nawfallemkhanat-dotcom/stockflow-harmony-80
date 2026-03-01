@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { WorkspaceProvider } from "@/contexts/WorkspaceContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -30,41 +31,43 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <HashRouter>
-        <AuthProvider>
-          <WorkspaceProvider>
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/inventory/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-              <Route path="/inventory/warehouses" element={<ProtectedRoute><Warehouses /></ProtectedRoute>} />
-              <Route path="/inventory/movements" element={<ProtectedRoute><Movements /></ProtectedRoute>} />
-              <Route path="/purchases/orders" element={<ProtectedRoute><PurchaseOrdersList /></ProtectedRoute>} />
-              <Route path="/purchases/orders/:id" element={<ProtectedRoute><PurchaseOrderForm /></ProtectedRoute>} />
-              <Route path="/purchases/suppliers" element={<ProtectedRoute><SuppliersList /></ProtectedRoute>} />
-              <Route path="/sales/orders" element={<ProtectedRoute><SalesOrdersList /></ProtectedRoute>} />
-              <Route path="/sales/orders/:id" element={<ProtectedRoute><SalesOrderForm /></ProtectedRoute>} />
-              <Route path="/sales/customers" element={<ProtectedRoute><CustomersList /></ProtectedRoute>} />
-              <Route path="/billing/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
-              <Route path="/billing/invoices/:id" element={<ProtectedRoute><InvoiceForm /></ProtectedRoute>} />
-              <Route path="/billing/quotes" element={<ProtectedRoute><QuotesList /></ProtectedRoute>} />
-              <Route path="/billing/quotes/:id" element={<ProtectedRoute><QuoteForm /></ProtectedRoute>} />
-              <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotesList /></ProtectedRoute>} />
-              <Route path="/billing/credit-notes/:id" element={<ProtectedRoute><CreditNoteForm /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </WorkspaceProvider>
-        </AuthProvider>
-      </HashRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ThemeProvider attribute="class" defaultTheme="light" storageKey="stockflow-theme">
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <HashRouter>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/inventory/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+                <Route path="/inventory/warehouses" element={<ProtectedRoute><Warehouses /></ProtectedRoute>} />
+                <Route path="/inventory/movements" element={<ProtectedRoute><Movements /></ProtectedRoute>} />
+                <Route path="/purchases/orders" element={<ProtectedRoute><PurchaseOrdersList /></ProtectedRoute>} />
+                <Route path="/purchases/orders/:id" element={<ProtectedRoute><PurchaseOrderForm /></ProtectedRoute>} />
+                <Route path="/purchases/suppliers" element={<ProtectedRoute><SuppliersList /></ProtectedRoute>} />
+                <Route path="/sales/orders" element={<ProtectedRoute><SalesOrdersList /></ProtectedRoute>} />
+                <Route path="/sales/orders/:id" element={<ProtectedRoute><SalesOrderForm /></ProtectedRoute>} />
+                <Route path="/sales/customers" element={<ProtectedRoute><CustomersList /></ProtectedRoute>} />
+                <Route path="/billing/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+                <Route path="/billing/invoices/:id" element={<ProtectedRoute><InvoiceForm /></ProtectedRoute>} />
+                <Route path="/billing/quotes" element={<ProtectedRoute><QuotesList /></ProtectedRoute>} />
+                <Route path="/billing/quotes/:id" element={<ProtectedRoute><QuoteForm /></ProtectedRoute>} />
+                <Route path="/billing/credit-notes" element={<ProtectedRoute><CreditNotesList /></ProtectedRoute>} />
+                <Route path="/billing/credit-notes/:id" element={<ProtectedRoute><CreditNoteForm /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </WorkspaceProvider>
+          </AuthProvider>
+        </HashRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;
