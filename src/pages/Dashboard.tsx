@@ -94,7 +94,7 @@ const Dashboard = () => {
       const allPaid = (allPaidRes.data || []) as any[];
 
       // Stock value: sum of quantity * cost_price per product
-      const productCostMap = new Map(products.map((p) => [p.id, Number(p.sell_price)]));
+      const productCostMap = new Map(products.map((p) => [p.id, Number(p.cost_price)]));
       const stockValue = stocks.reduce((sum, s) => {
         const price = productCostMap.get(s.product_id) || 0;
         return sum + s.quantity * price;

@@ -12,6 +12,8 @@ const statusStyles: Record<string, string> = {
   received: "bg-success/10 text-success border-success/20",
   paid: "bg-success/10 text-success border-success/20",
   shipped: "bg-success/10 text-success border-success/20",
+  accepted: "bg-success/10 text-success border-success/20",
+  sent: "bg-primary/10 text-primary border-primary/20",
   "low-stock": "bg-warning/10 text-warning border-warning/20",
   draft: "bg-muted text-muted-foreground border-border",
   ordered: "bg-primary/10 text-primary border-primary/20",
@@ -19,6 +21,8 @@ const statusStyles: Record<string, string> = {
   "out-of-stock": "bg-destructive/10 text-destructive border-destructive/20",
   overdue: "bg-destructive/10 text-destructive border-destructive/20",
   cancelled: "bg-destructive/10 text-destructive border-destructive/20",
+  rejected: "bg-destructive/10 text-destructive border-destructive/20",
+  inactive: "bg-muted text-muted-foreground border-border",
 };
 
 const StatusBadge = ({ status, className }: StatusBadgeProps) => {
